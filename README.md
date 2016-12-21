@@ -1,6 +1,10 @@
 Sequence labeler
 =========================
 
+This is a neural network sequence labeling system. Given a sequence of tokens, it will learn to assign labels to each token. Can be used for named entity recognition, POS-tagging, error detection, chunking, CCG supertagging, etc.
+
+The main model implements a bidirectional LSTM for sequence tagging. In addition, you can incorporate character-level information -- either by concatenating a character-based representation, or by using an attention/gating mechanism for combining it with a word embedding.
+
 Run with:
 
     python sequence_labeling_experiment.py config.conf
