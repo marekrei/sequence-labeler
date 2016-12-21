@@ -47,27 +47,24 @@ References
 
 If you use the main sequence labeling code, please reference:
 
-**Compositional Sequence Labeling Models for Error Detection in Learner Writing.** 
- 2016.
- Marek Rei and Helen Yannakoudakis.
- *In Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics (ACL-2016)*
-
+[**Compositional Sequence Labeling Models for Error Detection in Learner Writing.**](http://aclweb.org/anthology/P/P16/P16-1112.pdf)  
+Marek Rei and Helen Yannakoudakis.  
+*In Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics (ACL-2016)*
+  
 
 If you use the character-level attention component, please reference:
 
-**Attending to characters in neural sequence labeling models.**
- 2016.
- Marek Rei, Sampo Pyysalo and Gamal K.O. Crichton
- *In Proceedings of the 26th International Conference on Computational Linguistics (COLING-2016)*
-
+[**Attending to characters in neural sequence labeling models.**](https://aclweb.org/anthology/C/C16/C16-1030.pdf)  
+Marek Rei, Sampo Pyysalo and Gamal K.O. Crichton  
+*In Proceedings of the 26th International Conference on Computational Linguistics (COLING-2016)*
+  
 
 The CRF implementation is based on:
 
-**Neural Architectures for Named Entity Recognition.**
- 2016.
- Guillaume Lample, Miguel Ballesteros, Sandeep Subramanian, Kazuya Kawakami and Chris Dyer.
- *In Proceedings of NAACL-HLT 2016*
-
+[**Neural Architectures for Named Entity Recognition.**](https://arxiv.org/abs/1603.01360)  
+Guillaume Lample, Miguel Ballesteros, Sandeep Subramanian, Kazuya Kawakami and Chris Dyer.  
+*In Proceedings of NAACL-HLT 2016*
+  
 
 The conlleval.py script is from: https://github.com/spyysalo/conlleval.py
 
