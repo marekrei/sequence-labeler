@@ -38,7 +38,7 @@ Edit the values in config.conf as needed:
 * **max_batch_size** - Maximum batch size.
 * **save** - Path to save the model.
 * **load** - Path to load the model.
-* **random_seed** - Random seed for initialisation and data shuffling.
+* **random_seed** - Random seed for initialisation and data shuffling. This can affect results, so for robust conclusions I recommend running multiple experiments with different seeds and averaging the metrics.
 * **char_integration_method** - How character information is integrated. Options are: "none" (not integrated), "input" (concatenated), "attention" (the method proposed in Rei et al. (2016)).
 
 
@@ -47,28 +47,29 @@ References
 
 If you use the main sequence labeling code, please reference:
 
-Compositional Sequence Labeling Models for Error Detection in Learner Writing
-Marek Rei and Helen Yannakoudakis
-In Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics (ACL-2016)
+**Compositional Sequence Labeling Models for Error Detection in Learner Writing.** 
+ 2016.
+ Marek Rei and Helen Yannakoudakis.
+ *In Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics (ACL-2016)*
 
 
 If you use the character-level attention component, please reference:
 
-Attending to characters in neural sequence labeling models
-Marek Rei, Sampo Pyysalo and Gamal K.O. Crichton
-In Proceedings of the 26th International Conference on Computational Linguistics (COLING-2016)
+**Attending to characters in neural sequence labeling models.**
+ 2016.
+ Marek Rei, Sampo Pyysalo and Gamal K.O. Crichton
+ *In Proceedings of the 26th International Conference on Computational Linguistics (COLING-2016)*
 
 
-The current CRF implementation is based on:
+The CRF implementation is based on:
 
-Neural Architectures for Named Entity Recognition
-Guillaume Lample, Miguel Ballesteros, Sandeep Subramanian, Kazuya Kawakami and Chris Dyer
-In Proceedings of NAACL-HLT 2016
+**Neural Architectures for Named Entity Recognition.**
+ 2016.
+ Guillaume Lample, Miguel Ballesteros, Sandeep Subramanian, Kazuya Kawakami and Chris Dyer.
+ *In Proceedings of NAACL-HLT 2016*
 
 
-The conlleval.py script is from:
-
-https://github.com/spyysalo/conlleval.py
+The conlleval.py script is from: https://github.com/spyysalo/conlleval.py
 
 
 License
