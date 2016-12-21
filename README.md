@@ -19,7 +19,7 @@ Configuration
 
 Edit the values in config.conf as needed:
 
-* **path_train** - Path to the training data.
+* **path_train** - Path to the training data, in CoNLL tab-separated format. One word per line, first column is the word, last column is the label. Empty lines between sentences.
 * **path_dev** - Path to the development data, used for choosing the best epoch.
 * **path_test** - Path to the test file. Can contain multiple files, colon separated.
 * **main_label** - The output label for which precision/recall/F-measure are calculated.
