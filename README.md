@@ -43,6 +43,7 @@ Edit the values in config.conf as needed:
 * **save** - Path to save the model.
 * **load** - Path to load the model.
 * **random_seed** - Random seed for initialisation and data shuffling. This can affect results, so for robust conclusions I recommend running multiple experiments with different seeds and averaging the metrics.
+* **crf_on_top** - If True, use a CRF as the output layer. If False, use softmax instead.
 * **char_integration_method** - How character information is integrated. Options are: "none" (not integrated), "input" (concatenated), "attention" (the method proposed in Rei et al. (2016)).
 
 

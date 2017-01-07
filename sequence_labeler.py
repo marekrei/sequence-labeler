@@ -64,10 +64,15 @@ class SequenceLabeler(object):
         output = theano.tensor.dot(processed_tensor, W_output) + bias_output
         output = output[:,1:-1,:] # removing <s> and </s>
 
-        all_paths_scores, real_paths_scores, best_sequence, scores = crf.construct("crf", output, config["n_labels"], label_ids, self.create_parameter_matrix)
-        predicted_labels = best_sequence
-        output_probs = scores
-        cost += - (real_paths_scores - all_paths_scores).sum()
+        if config["crf_on_top"] == True:
+            all_paths_scores, real_paths_scores, best_sequence, scores = crf.construct("crf", output, config["n_labels"], label_ids, self.create_parameter_matrix)
+            predicted_labels = best_sequence
+            output_probs = scores
+            cost += - (real_paths_scores - all_paths_scores).sum()
+        else:
+            output_probs = theano.tensor.nnet.softmax(output.reshape((word_ids.shape[0]*(word_ids.shape[1]-2), config["n_labels"])))
+            predicted_labels = theano.tensor.argmax(output_probs.reshape((word_ids.shape[0], (word_ids.shape[1]-2), config["n_labels"])), axis=2)
+            cost += theano.tensor.nnet.categorical_crossentropy(output_probs, label_ids.reshape((-1,))).sum()
 
         gradients = theano.tensor.grad(cost, self.params.values(), disconnected_inputs='ignore')
         updates = lasagne.updates.adadelta(gradients, self.params.values(), learningrate)
