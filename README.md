@@ -60,7 +60,7 @@ Marek Rei and Helen Yannakoudakis
 If you use the character-level attention component, please reference:
 
 [**Attending to characters in neural sequence labeling models**](https://aclweb.org/anthology/C/C16/C16-1030.pdf)  
-Marek Rei, Gamal K.O. Crichton and Sampo Pyysalo 
+Marek Rei, Gamal K.O. Crichton and Sampo Pyysalo  
 *In Proceedings of the 26th International Conference on Computational Linguistics (COLING-2016)*
   
 
