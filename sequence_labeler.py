@@ -22,6 +22,7 @@ class SequenceLabeler(object):
         char_mask = theano.tensor.ftensor3('char_mask')
         label_ids = theano.tensor.imatrix('label_ids')
         learningrate = theano.tensor.fscalar('learningrate')
+        is_training = theano.tensor.iscalar('is_training')
 
         cost = 0.0
         input_tensor = None
@@ -56,10 +57,36 @@ class SequenceLabeler(object):
             attention_output = recurrence.create_feedforward(attention_output, config["word_embedding_size"], config["word_embedding_size"], "sigmoid", self.create_parameter_matrix, "attention_sigmoid")
             input_tensor = input_tensor * attention_output + char_output_tensor * (1.0 - attention_output)
 
-        processed_tensor = recurrence.create_birnn(input_tensor, input_vector_size, None, config["word_recurrent_size"], return_combined=False, fn_create_parameter_matrix=self.create_parameter_matrix, name="word_birnn")
-        processed_tensor = recurrence.create_feedforward(processed_tensor, config["word_recurrent_size"]*2, config["narrow_layer_size"], "tanh", fn_create_parameter_matrix=self.create_parameter_matrix, name="narrow_ff")
+        if config["dropout_input"] > 0.0:
+            p = config["dropout_input"]
+            trng = theano.tensor.shared_randomstreams.RandomStreams(seed=1)
+            dropout_mask = trng.binomial(n=1, p=1-p, size=input_tensor.shape, dtype=floatX)
+            input_train = dropout_mask * input_tensor
+            input_test = (1 - p) * input_tensor
+            input_tensor = theano.tensor.switch(theano.tensor.neq(is_training, 0), input_train, input_test)
 
-        W_output = self.create_parameter_matrix('W_output', (config["narrow_layer_size"], config["n_labels"]))
+        recurrent_forward = recurrence.create_lstm(input_tensor.dimshuffle(1,0,2), input_vector_size, None, 
+                                        config["word_recurrent_size"], False, go_backwards=False, 
+                                        fn_create_parameter_matrix=self.create_parameter_matrix, name="word_birnn_forward").dimshuffle(1,0,2)
+        recurrent_backward = recurrence.create_lstm(input_tensor.dimshuffle(1,0,2), input_vector_size, None, 
+                                        config["word_recurrent_size"], False, go_backwards=True, 
+                                        fn_create_parameter_matrix=self.create_parameter_matrix, name="word_birnn_backward").dimshuffle(1,0,2)
+
+        if config["lmcost_gamma"] > 0.0:
+            cost += config["lmcost_gamma"] * self.construct_lmcost(recurrent_forward[:,:-1,:], config["word_recurrent_size"], word_ids[:,1:], "lmcost_forward")
+            cost += config["lmcost_gamma"] * self.construct_lmcost(recurrent_backward[:,1:,:], config["word_recurrent_size"], word_ids[:,:-1], "lmcost_backward")
+
+        processed_tensor = theano.tensor.concatenate([recurrent_forward, recurrent_backward], axis=2)
+        processed_tensor_size = config["word_recurrent_size"] * 2
+
+#        processed_tensor = recurrence.create_birnn(input_tensor, input_vector_size, None, config["word_recurrent_size"], return_combined=False, fn_create_parameter_matrix=self.create_parameter_matrix, name="word_birnn")
+#        processed_tensor = recurrence.create_feedforward(processed_tensor, config["word_recurrent_size"]*2, config["narrow_layer_size"], "tanh", fn_create_parameter_matrix=self.create_parameter_matrix, name="narrow_ff")
+
+        if config["narrow_layer_size"] > 0:
+            processed_tensor = recurrence.create_feedforward(processed_tensor, processed_tensor_size, config["narrow_layer_size"], "tanh", fn_create_parameter_matrix=self.create_parameter_matrix, name="narrow_ff")
+            processed_tensor_size = config["narrow_layer_size"]
+
+        W_output = self.create_parameter_matrix('W_output', (processed_tensor_size, config["n_labels"]))
         bias_output = self.create_parameter_matrix('bias_output', (config["n_labels"],))
         output = theano.tensor.dot(processed_tensor, W_output) + bias_output
         output = output[:,1:-1,:] # removing <s> and </s>
@@ -80,8 +107,18 @@ class SequenceLabeler(object):
         input_vars_train = [word_ids, char_ids, char_mask, label_ids, learningrate]
         input_vars_test = [word_ids, char_ids, char_mask, label_ids]
         output_vars = [cost, predicted_labels]
-        self.train = theano.function(input_vars_train, output_vars, updates=updates, on_unused_input='ignore', allow_input_downcast = True)
-        self.test = theano.function(input_vars_test, output_vars, on_unused_input='ignore', allow_input_downcast = True)
+        self.train = theano.function(input_vars_train, output_vars, updates=updates, on_unused_input='ignore', allow_input_downcast = True, givens=({is_training: numpy.cast['int32'](1)}))
+        self.test = theano.function(input_vars_test, output_vars, on_unused_input='ignore', allow_input_downcast = True, givens=({is_training: numpy.cast['int32'](0)}))
+
+
+    def construct_lmcost(self, hidden_layer, hidden_layer_size, word_id_targets, name):
+        max_vocab_size = min(self.config["n_words"], self.config["lmcost_max_vocab_size"])
+        lmcost_layer = recurrence.create_feedforward(hidden_layer, hidden_layer_size, self.config["lmcost_layer_size"], "tanh", fn_create_parameter_matrix=self.create_parameter_matrix, name=name+"_tanh")
+        lmcost_output = recurrence.create_feedforward(lmcost_layer, self.config["lmcost_layer_size"], max_vocab_size+1, "linear", fn_create_parameter_matrix=self.create_parameter_matrix, name=name+"_output")
+        lmcost_output = theano.tensor.nnet.softmax(lmcost_output.reshape((lmcost_layer.shape[0]*lmcost_layer.shape[1], max_vocab_size+1)))
+        word_id_targets = theano.tensor.switch(theano.tensor.ge(word_id_targets, max_vocab_size), max_vocab_size, word_id_targets)
+        lmcost = theano.tensor.nnet.categorical_crossentropy(lmcost_output, word_id_targets.reshape((-1,))).sum()
+        return lmcost
 
     def create_parameter_matrix(self, name, size):
         param_vals = numpy.asarray(self.rng.normal(loc=0.0, scale=0.1, size=size), dtype=floatX)
