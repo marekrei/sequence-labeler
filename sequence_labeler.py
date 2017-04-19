@@ -79,9 +79,6 @@ class SequenceLabeler(object):
         processed_tensor = theano.tensor.concatenate([recurrent_forward, recurrent_backward], axis=2)
         processed_tensor_size = config["word_recurrent_size"] * 2
 
-#        processed_tensor = recurrence.create_birnn(input_tensor, input_vector_size, None, config["word_recurrent_size"], return_combined=False, fn_create_parameter_matrix=self.create_parameter_matrix, name="word_birnn")
-#        processed_tensor = recurrence.create_feedforward(processed_tensor, config["word_recurrent_size"]*2, config["narrow_layer_size"], "tanh", fn_create_parameter_matrix=self.create_parameter_matrix, name="narrow_ff")
-
         if config["narrow_layer_size"] > 0:
             processed_tensor = recurrence.create_feedforward(processed_tensor, processed_tensor_size, config["narrow_layer_size"], "tanh", fn_create_parameter_matrix=self.create_parameter_matrix, name="narrow_ff")
             processed_tensor_size = config["narrow_layer_size"]
@@ -97,16 +94,17 @@ class SequenceLabeler(object):
             output_probs = scores
             cost += - (real_paths_scores - all_paths_scores).sum()
         else:
-            output_probs = theano.tensor.nnet.softmax(output.reshape((word_ids.shape[0]*(word_ids.shape[1]-2), config["n_labels"])))
-            predicted_labels = theano.tensor.argmax(output_probs.reshape((word_ids.shape[0], (word_ids.shape[1]-2), config["n_labels"])), axis=2)
-            cost += theano.tensor.nnet.categorical_crossentropy(output_probs, label_ids.reshape((-1,))).sum()
+            output_probs_ = theano.tensor.nnet.softmax(output.reshape((word_ids.shape[0]*(word_ids.shape[1]-2), config["n_labels"])))
+            output_probs = output_probs_.reshape((word_ids.shape[0], (word_ids.shape[1]-2), config["n_labels"]))
+            predicted_labels = theano.tensor.argmax(output_probs, axis=2)
+            cost += theano.tensor.nnet.categorical_crossentropy(output_probs_, label_ids.reshape((-1,))).sum()
 
         gradients = theano.tensor.grad(cost, self.params.values(), disconnected_inputs='ignore')
         updates = lasagne.updates.adadelta(gradients, self.params.values(), learningrate)
 
         input_vars_train = [word_ids, char_ids, char_mask, label_ids, learningrate]
         input_vars_test = [word_ids, char_ids, char_mask, label_ids]
-        output_vars = [cost, predicted_labels]
+        output_vars = [cost, predicted_labels, output_probs]
         self.train = theano.function(input_vars_train, output_vars, updates=updates, on_unused_input='ignore', allow_input_downcast = True, givens=({is_training: numpy.cast['int32'](1)}))
         self.test = theano.function(input_vars_test, output_vars, on_unused_input='ignore', allow_input_downcast = True, givens=({is_training: numpy.cast['int32'](0)}))
 
