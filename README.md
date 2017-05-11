@@ -22,9 +22,9 @@ Requirements
 Data format
 -------------------------
 
-The trainign and test data is expected in standard CoNLL-type tab-separated format. One word per line, separate column for token and label, empty line between sentences.
+The training and test data is expected in standard CoNLL-type tab-separated format. One word per line, separate column for token and label, empty line between sentences.
 
-For error detection, this would be something like this:
+For error detection, this would be something like:
 
     I       c
     saws    i
