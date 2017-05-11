@@ -124,7 +124,7 @@ Marek Rei, Gamal K.O. Crichton and Sampo Pyysalo
 If you use the language modeling objective, please reference:
 
 [**Semi-supervised Multitask Learning for Sequence Labeling**](https://arxiv.org/abs/1704.07156)  
-Marek Rei
+Marek Rei  
 *In Proceedings of the 55th Annual Meeting of the Association for Computational Linguistics (ACL-2017)*
 
 The CRF implementation is based on:
