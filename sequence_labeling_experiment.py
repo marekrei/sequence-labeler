@@ -8,6 +8,7 @@ import os
 import re
 import ConfigParser
 import theano
+import time
 
 from sequence_labeler import SequenceLabeler
 from sequence_labeling_evaluator import SequenceLabelingEvaluator
@@ -15,6 +16,12 @@ from sequence_labeling_evaluator import SequenceLabelingEvaluator
 floatX=theano.config.floatX
 
 def read_input_files(file_paths):
+    """
+    Reads input files in whitespace-separated format.
+    Will split file_paths on comma, reading from multiple files.
+    Uses the first column as the input word and the last column as the label.
+    Returns a list, with one element per sentence. Each element is a tuple with two lists: the words and the labels.
+    """
     sentences = []
     for file_path in file_paths.strip().split(","):
         with open(file_path, "r") as f:
@@ -34,6 +41,12 @@ def read_input_files(file_paths):
 
 
 def create_batches_of_sentence_ids(sentences, max_batch_size):
+    """
+    Groups together sentences with the same length into batches.
+    If max_batch_size is positive, this value determines the maximum number of sentences in each batch.
+    If max_batch_size has a negative value, the function dynamically creates the batches such that each batch contains abs(max_batch_size) words.
+    Returns a list of lists with sentences ids.
+    """
     sentence_ids_by_length = collections.OrderedDict()
     for i in range(len(sentences)):
         length = len(sentences[i][0])
@@ -46,20 +59,24 @@ def create_batches_of_sentence_ids(sentences, max_batch_size):
         if max_batch_size > 0:
             batch_size = max_batch_size
         else:
-            batch_size = int((-1 * max_batch_size) / (sentence_length+2))
+            batch_size = int((-1 * max_batch_size) / sentence_length)
 
         for i in range(0, len(sentence_ids_by_length[sentence_length]), batch_size):
             batches_of_sentence_ids.append(sentence_ids_by_length[sentence_length][i:i + batch_size])
     return batches_of_sentence_ids
 
 
-def create_feature_matrices_for_batch(sentences, sentence_ids_in_batch, word2id, char2id, label2id, lowercase_words=True, lowercase_chars=False, replace_digits=True, allowed_word_length=-1):
+def create_feature_matrices_for_batch(sentences, sentence_ids_in_batch, word2id, char2id, label2id, singletons, config):
+    """
+    Maps words, characters and labels into integer ids, then creates padded numpy matrices that can be given as input to the network.
+    The value of singletons should be None during testing.
+    """
     batch_data = []
 
     for sentence_id in sentence_ids_in_batch:
-        word_ids = map_text_to_ids(" ".join(sentences[sentence_id][0]), word2id, "<s>", "</s>", "<unk>", lowercase=lowercase_words, replace_digits=replace_digits)
+        word_ids = map_text_to_ids(" ".join(sentences[sentence_id][0]), word2id, "<s>", "</s>", "<unk>", lowercase=config["lowercase_words"], replace_digits=config["replace_digits"], singletons=singletons)
         char_ids = [map_text_to_ids("<s>", char2id, "<w>", "</w>", "<cunk>")] + \
-                   [map_text_to_ids(" ".join(list(word)), char2id, "<w>", "</w>", "<cunk>", lowercase=lowercase_chars, replace_digits=replace_digits) for word in sentences[sentence_id][0]] + \
+                   [map_text_to_ids(" ".join(list(word)), char2id, "<w>", "</w>", "<cunk>", lowercase=config["lowercase_chars"], replace_digits=config["replace_digits"]) for word in sentences[sentence_id][0]] + \
                    [map_text_to_ids("</s>", char2id, "<w>", "</w>", "<cunk>")]
         label_ids = map_text_to_ids(" ".join(sentences[sentence_id][1]), label2id)
 
@@ -68,7 +85,7 @@ def create_feature_matrices_for_batch(sentences, sentence_ids_in_batch, word2id,
 
         batch_data.append((word_ids, char_ids, label_ids))
 
-    allowed_word_length = allowed_word_length if allowed_word_length > 0 else 100000000
+    allowed_word_length = config["allowed_word_length"] if config["allowed_word_length"] > 0 else 100000000
     max_word_length = min(numpy.array([[len(char_ids) for char_ids in batch_data[i][1]] for i in range(len(batch_data))]).max(), allowed_word_length)
     sentence_length = len(batch_data[0][0])
 
@@ -90,41 +107,52 @@ def create_feature_matrices_for_batch(sentences, sentence_ids_in_batch, word2id,
     return word_ids, char_ids, char_mask, label_ids
 
 
-def process_sentences(sequencelabeler, sentences, testing, learningrate, name, main_label_id, word2id, char2id, label2id, lowercase_words=True, lowercase_chars=False, replace_digits=True, allowed_word_length=-1, max_batch_size=64, conll_eval=False, verbose=True):
-    batches_of_sentence_ids = create_batches_of_sentence_ids(sentences, max_batch_size)
+
+def process_sentences(sequencelabeler, sentences, testing, learningrate, name, main_label_id, word2id, char2id, label2id, singletons, config, verbose=True):
+    """
+    Process all the sentences with the sequencelabeler, return evaluation metrics.
+    """
+    evaluator = SequenceLabelingEvaluator(main_label_id, label2id, config["conll_eval"])
+    batches_of_sentence_ids = create_batches_of_sentence_ids(sentences, config["max_batch_size"])
     if testing == False:
         random.shuffle(batches_of_sentence_ids)
-    evaluator = SequenceLabelingEvaluator(main_label_id, label2id, conll_eval)
 
-    total_sentences = sum([len(x) for x in batches_of_sentence_ids])
     for sentence_ids_in_batch in batches_of_sentence_ids:
-        word_ids, char_ids, char_mask, label_ids = create_feature_matrices_for_batch(sentences, sentence_ids_in_batch, word2id, char2id, label2id, lowercase_words, lowercase_chars, replace_digits, allowed_word_length)
+        word_ids, char_ids, char_mask, label_ids = create_feature_matrices_for_batch(sentences, sentence_ids_in_batch, word2id, char2id, label2id, singletons, config)
 
         if testing == True:
-            cost, predicted_labels, _ = sequencelabeler.test(word_ids, char_ids, char_mask, label_ids)
+            cost, predicted_labels = sequencelabeler.test(word_ids, char_ids, char_mask, label_ids)
         else:
-            cost, predicted_labels, _ = sequencelabeler.train(word_ids, char_ids, char_mask, label_ids, learningrate)
+            cost, predicted_labels = sequencelabeler.train(word_ids, char_ids, char_mask, label_ids, learningrate)
         evaluator.append_data(cost, predicted_labels, word_ids, label_ids)
         
         word_ids, char_ids, char_mask, label_ids = None, None, None, None
-        while gc.collect() > 0:
+        while config["garbage_collection"] == True and gc.collect() > 0:
             pass
 
     results = evaluator.get_results(name)
     if verbose == True:
         for key in results:
             print key + ": " + str(results[key])
-    return results[name + "_cost_sum"], results
+    return results
 
 
 def is_float(value):
+    """
+    Check in value is of type float()
+    """
     try:
         float(value)
         return True
     except ValueError:
         return False
 
+
 def parse_config(config_section, config_path):
+    """
+    Reads configuration from the file and returns a dictionary.
+    Tries to guess the correct datatype for each of the config values.
+    """
     config_parser = ConfigParser.SafeConfigParser(allow_no_value=True)
     config_parser.read(config_path)
     config = collections.OrderedDict()
@@ -143,11 +171,14 @@ def parse_config(config_section, config_path):
 
 
 def generate_word2id_dictionary(texts, min_freq=-1, insert_words=None, lowercase=False, replace_digits=False):
+    """
+    Iterates over texts and creates a word2id mapping.
+    """
     counter = collections.Counter()
     for text in texts:
-        if lowercase:
+        if lowercase == True:
             text = text.lower()
-        if replace_digits:
+        if replace_digits ==  True:
             text = re.sub(r'\d', '0', text)
         counter.update(text.strip().split())
 
@@ -165,12 +196,15 @@ def generate_word2id_dictionary(texts, min_freq=-1, insert_words=None, lowercase
     return word2id
 
 
-def map_text_to_ids(text, word2id, start_token=None, end_token=None, unk_token=None, lowercase=False, replace_digits=False):
+def map_text_to_ids(text, word2id, start_token=None, end_token=None, unk_token=None, lowercase=False, replace_digits=False, singletons=None):
+    """
+    Map the text to ids, using the word2id mapping.
+    """
     ids = []
 
-    if lowercase:
+    if lowercase == True:
         text = text.lower()
-    if replace_digits:
+    if replace_digits == True:
         text = re.sub(r'\d', '0', text)
 
     if start_token != None:
@@ -178,7 +212,9 @@ def map_text_to_ids(text, word2id, start_token=None, end_token=None, unk_token=N
     if end_token != None:
         text = text + " " + end_token
     for word in text.strip().split():
-        if word in word2id:
+        if singletons != None and word in singletons and word in word2id and unk_token != None and numpy.random.uniform() < 0.5:
+            ids.append(word2id[unk_token])
+        elif word in word2id:
             ids.append(word2id[word])
         elif unk_token != None:
             ids.append(word2id[unk_token])
@@ -187,12 +223,25 @@ def map_text_to_ids(text, word2id, start_token=None, end_token=None, unk_token=N
     return ids
 
 
+def find_singletons(sentences):
+    """
+    Construct a set of words that only occur once in the text.
+    """
+    counter = collections.OrderedDict()
+    for sentence, labels in sentences:
+        for word in sentence:
+            if word not in counter:
+                counter[word] = 0
+            counter[word] = counter[word] + 1
+    return set([word for word in counter if counter[word] == 1])
 
-def preload_vectors(word2id, vector_size, word2vec_path):
-    rng = numpy.random.RandomState(123)
-    preloaded_vectors = numpy.asarray(rng.normal(loc=0.0, scale=0.1, size=(len(word2id), vector_size)), dtype=floatX)
 
-    with open(word2vec_path) as f:
+def preload_embeddings(word2id, embedding_size, embedding_path, embedding_matrix=None):
+    """
+    Load embeddings from a file.
+    """
+
+    with open(embedding_path) as f:
         for line in f:
             line_parts = line.strip().split()
             if len(line_parts) <= 2:
@@ -200,14 +249,21 @@ def preload_vectors(word2id, vector_size, word2vec_path):
             word = line_parts[0]
             if word in word2id:
                 word_id = word2id[word]
-                vector = numpy.array(line_parts[1:])
-                preloaded_vectors[word_id] = vector
-    return preloaded_vectors
+                embedding = numpy.array(line_parts[1:])
+                embedding_matrix[word_id] = embedding
+    return embedding_matrix
 
 
 def run_experiment(config_path):
+    """
+    Run the sequence labeling experiment, based on the config file.
+    """
     config = parse_config("config", config_path)
-    random.seed(config["random_seed"] + 1)
+
+    random.seed(config["random_seed"])
+    numpy.random.seed(config["random_seed"])
+
+
     temp_model_path = config_path + ".model"
     sequencelabeler = None
 
@@ -217,30 +273,33 @@ def run_experiment(config_path):
         word2id = generate_word2id_dictionary([" ".join(sentence[0]) for sentence in sentences_train], 
                                                         min_freq=config["min_word_freq"], 
                                                         insert_words=["<unk>", "<s>", "</s>"], 
-                                                        lowercase=False, 
-                                                        replace_digits=True)
+                                                        lowercase=config["lowercase_words"], 
+                                                        replace_digits=config["replace_digits"])
         label2id = generate_word2id_dictionary([" ".join(sentence[1]) for sentence in sentences_train])
         char2id = generate_word2id_dictionary([" ".join([" ".join(list(word)) for word in sentence[0]]) for sentence in sentences_train], 
                                                         min_freq=-1, 
                                                         insert_words=["<cunk>", "<w>", "</w>", "<s>", "</s>"], 
-                                                        lowercase=False, 
-                                                        replace_digits=True)
+                                                        lowercase=config["lowercase_words"], 
+                                                        replace_digits=config["replace_digits"])
+        singletons = find_singletons(sentences_train) if config["use_singletons"] == True else None
 
     if config["load"] is not None and len(config["load"]) > 0:
         sequencelabeler = SequenceLabeler.load(config["load"])
         label2id = sequencelabeler.config["label2id"]
         word2id = sequencelabeler.config["word2id"]
         char2id = sequencelabeler.config["char2id"]
+        singletons = sequencelabeler.config["singletons"]
 
     if config["load"] is None or len(config["load"]) == 0:
         config["n_words"] = len(word2id)
         config["n_chars"] = len(char2id)
         config["n_labels"] = len(label2id)
+        config["n_singletons"] = len(singletons) if singletons != None else 0
         config["unk_token"] = "<unk>"
         config["unk_token_id"] = word2id["<unk>"]
         sequencelabeler = SequenceLabeler(config)
         if config['preload_vectors'] is not None:
-            new_embeddings = preload_vectors(word2id, config['word_embedding_size'], config['preload_vectors'])
+            new_embeddings = preload_embeddings(word2id, config['word_embedding_size'], config['preload_vectors'], embedding_matrix=sequencelabeler.word_embeddings.get_value())
             sequencelabeler.word_embeddings.set_value(new_embeddings)
 
     if config["path_dev"] is not None and len(config["path_dev"]) > 0:
@@ -248,13 +307,17 @@ def run_experiment(config_path):
 
     # printing config
     for key, val in config.items():
-            print key, ": ", val
+        print key, ": ", val
     print "parameter_count: ", sequencelabeler.get_parameter_count()
     print "parameter_count_without_word_embeddings: ", sequencelabeler.get_parameter_count_without_word_embeddings()
 
     config["word2id"] = word2id
     config["char2id"] = char2id
     config["label2id"] = label2id
+    config["singletons"] = singletons
+
+    main_measure = config["best_model_selector"].split(":")[0]
+    main_measure_type = config["best_model_selector"].split(":")[1]
 
     if config["path_train"] is not None and len(config["path_train"]) > 0:
         best_selector_value = 0.0
@@ -264,24 +327,22 @@ def run_experiment(config_path):
             print("learningrate: " + str(learningrate))
             random.shuffle(sentences_train)
 
+            results_train = process_sentences(sequencelabeler, sentences_train, testing=False, learningrate=learningrate, name="train", main_label_id=label2id[str(config["main_label"])], word2id=word2id, char2id=char2id, label2id=label2id, singletons=singletons, config=config, verbose=True)
 
-            train_cost_sum, results_train = process_sentences(sequencelabeler, sentences_train, testing=False, learningrate=learningrate, name="train", main_label_id=label2id[str(config["main_label"])], word2id=word2id, char2id=char2id, label2id=label2id, lowercase_words=config["lowercase_words"], lowercase_chars=False, replace_digits=config["replace_digits"], allowed_word_length=config["allowed_word_length"], max_batch_size=config['max_batch_size'], conll_eval=config["conll_eval"], verbose=True)
+            results_dev = process_sentences(sequencelabeler, sentences_dev, testing=True, learningrate=0.0, name="dev", main_label_id=label2id[str(config["main_label"])], word2id=word2id, char2id=char2id, label2id=label2id, singletons=None, config=config, verbose=True)
 
-            dev_cost_sum, results_dev = process_sentences(sequencelabeler, sentences_dev, testing=True, learningrate=0.0, name="dev", main_label_id=label2id[str(config["main_label"])], word2id=word2id, char2id=char2id, label2id=label2id, lowercase_words=config["lowercase_words"], lowercase_chars=False, replace_digits=config["replace_digits"], allowed_word_length=config["allowed_word_length"], max_batch_size=config['max_batch_size'], conll_eval=config["conll_eval"], verbose=True)
-
-
-            if math.isnan(dev_cost_sum) or math.isinf(dev_cost_sum):
+            if math.isnan(results_dev["dev_cost_sum"]) or math.isinf(results_dev["dev_cost_sum"]):
                 sys.stderr.write("ERROR: Cost is NaN or Inf. Exiting.\n")
                 break
 
-            if (epoch == 0 or (config["best_model_selector"].split(":")[1] == "high" and results_dev[config["best_model_selector"].split(":")[0]] > best_selector_value) 
-                           or (config["best_model_selector"].split(":")[1] == "low" and results_dev[config["best_model_selector"].split(":")[0]] < best_selector_value)):
+            if (epoch == 0 or (main_measure_type == "high" and results_dev[main_measure] > best_selector_value) 
+                           or (main_measure_type == "low" and results_dev[main_measure] < best_selector_value)):
                 best_epoch = epoch
-                best_selector_value = results_dev[config["best_model_selector"].split(":")[0]]
+                best_selector_value = results_dev[main_measure]
                 sequencelabeler.save(temp_model_path)
             print("best_epoch: " + str(best_epoch))
 
-            while gc.collect() > 0:
+            while config["garbage_collection"] == True and gc.collect() > 0:
                 pass
 
             if config["stop_if_no_improvement_for_epochs"] > 0 and (epoch - best_epoch) >= config["stop_if_no_improvement_for_epochs"]:
@@ -299,7 +360,7 @@ def run_experiment(config_path):
         i = 0
         for path_test in config["path_test"].strip().split(":"):
             sentences_test = read_input_files(path_test)
-            test_cost_sum, results_test = process_sentences(sequencelabeler, sentences_test, testing=True, learningrate=0.0, name="test"+str(i), main_label_id=label2id[str(config["main_label"])], word2id=word2id, char2id=char2id, label2id=label2id, lowercase_words=config["lowercase_words"], lowercase_chars=False, replace_digits=config["replace_digits"], allowed_word_length=config["allowed_word_length"], max_batch_size=config['max_batch_size'], conll_eval=config["conll_eval"], verbose=True)
+            results_test = process_sentences(sequencelabeler, sentences_test, testing=True, learningrate=0.0, name="test"+str(i), main_label_id=label2id[str(config["main_label"])], word2id=word2id, char2id=char2id, label2id=label2id, singletons=None, config=config, verbose=True)
             i += 1
 
 

@@ -73,8 +73,9 @@ class SequenceLabeler(object):
                                         fn_create_parameter_matrix=self.create_parameter_matrix, name="word_birnn_backward").dimshuffle(1,0,2)
 
         if config["lmcost_gamma"] > 0.0:
-            cost += config["lmcost_gamma"] * self.construct_lmcost(recurrent_forward[:,:-1,:], config["word_recurrent_size"], word_ids[:,1:], "lmcost_forward")
-            cost += config["lmcost_gamma"] * self.construct_lmcost(recurrent_backward[:,1:,:], config["word_recurrent_size"], word_ids[:,:-1], "lmcost_backward")
+            lmcost_max_vocab_size = min(self.config["n_words"], self.config["lmcost_max_vocab_size"])
+            cost += config["lmcost_gamma"] * self.construct_lmcost(recurrent_forward[:,:-1,:], config["word_recurrent_size"], word_ids[:,1:], self.config["lmcost_layer_size"], lmcost_max_vocab_size, "lmcost_forward")
+            cost += config["lmcost_gamma"] * self.construct_lmcost(recurrent_backward[:,1:,:], config["word_recurrent_size"], word_ids[:,:-1], self.config["lmcost_layer_size"], lmcost_max_vocab_size, "lmcost_backward")
 
         processed_tensor = theano.tensor.concatenate([recurrent_forward, recurrent_backward], axis=2)
         processed_tensor_size = config["word_recurrent_size"] * 2
@@ -100,19 +101,25 @@ class SequenceLabeler(object):
             cost += theano.tensor.nnet.categorical_crossentropy(output_probs_, label_ids.reshape((-1,))).sum()
 
         gradients = theano.tensor.grad(cost, self.params.values(), disconnected_inputs='ignore')
-        updates = lasagne.updates.adadelta(gradients, self.params.values(), learningrate)
+        if config["opt_strategy"] == "adadelta":
+            updates = lasagne.updates.adadelta(gradients, self.params.values(), learningrate)
+        elif config["opt_strategy"] == "adam":
+            updates = lasagne.updates.adam(gradients, self.params.values(), learningrate)
+        elif config["opt_strategy"] == "sgd":
+            updates = lasagne.updates.sgd(gradients, self.params.values(), learningrate)
+        else:
+            raise ValueError("Unknown optimisation strategy: " + str(config["opt_strategy"]))
 
         input_vars_train = [word_ids, char_ids, char_mask, label_ids, learningrate]
         input_vars_test = [word_ids, char_ids, char_mask, label_ids]
-        output_vars = [cost, predicted_labels, output_probs]
+        output_vars = [cost, predicted_labels]
         self.train = theano.function(input_vars_train, output_vars, updates=updates, on_unused_input='ignore', allow_input_downcast = True, givens=({is_training: numpy.cast['int32'](1)}))
         self.test = theano.function(input_vars_test, output_vars, on_unused_input='ignore', allow_input_downcast = True, givens=({is_training: numpy.cast['int32'](0)}))
+        self.test_return_probs = theano.function(input_vars_test, output_vars + [output_probs,], on_unused_input='ignore', allow_input_downcast = True, givens=({is_training: numpy.cast['int32'](0)}))
 
-
-    def construct_lmcost(self, hidden_layer, hidden_layer_size, word_id_targets, name):
-        max_vocab_size = min(self.config["n_words"], self.config["lmcost_max_vocab_size"])
-        lmcost_layer = recurrence.create_feedforward(hidden_layer, hidden_layer_size, self.config["lmcost_layer_size"], "tanh", fn_create_parameter_matrix=self.create_parameter_matrix, name=name+"_tanh")
-        lmcost_output = recurrence.create_feedforward(lmcost_layer, self.config["lmcost_layer_size"], max_vocab_size+1, "linear", fn_create_parameter_matrix=self.create_parameter_matrix, name=name+"_output")
+    def construct_lmcost(self, hidden_layer, hidden_layer_size, word_id_targets, lmcost_layer_size, max_vocab_size, name):
+        lmcost_layer = recurrence.create_feedforward(hidden_layer, hidden_layer_size, lmcost_layer_size, "tanh", fn_create_parameter_matrix=self.create_parameter_matrix, name=name+"_tanh")
+        lmcost_output = recurrence.create_feedforward(lmcost_layer, lmcost_layer_size, max_vocab_size+1, "linear", fn_create_parameter_matrix=self.create_parameter_matrix, name=name+"_output")
         lmcost_output = theano.tensor.nnet.softmax(lmcost_output.reshape((lmcost_layer.shape[0]*lmcost_layer.shape[1], max_vocab_size+1)))
         word_id_targets = theano.tensor.switch(theano.tensor.ge(word_id_targets, max_vocab_size), max_vocab_size, word_id_targets)
         lmcost = theano.tensor.nnet.categorical_crossentropy(lmcost_output, word_id_targets.reshape((-1,))).sum()
@@ -150,16 +157,12 @@ class SequenceLabeler(object):
         f.close()
 
     @staticmethod
-    def load(filename, new_output_layer_size=None):
+    def load(filename):
         f = file(filename, 'rb')
         dump = cPickle.load(f)
         f.close()
-        if new_output_layer_size is not None:
-            dump["n_labels"] = new_output_layer_size
         sequencelabeler = SequenceLabeler(dump["config"])
         for param_name in sequencelabeler.params:
             assert(param_name in dump["params"])
-            if new_output_layer_size is not None and param_name in ["W_output", "bias_output"]:
-                continue
             sequencelabeler.params[param_name].set_value(dump["params"][param_name])
         return sequencelabeler
