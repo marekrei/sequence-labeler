@@ -18,6 +18,33 @@ Requirements
 * theano
 * lasagne
 
+
+Data format
+-------------------------
+
+The trainign and test data is expected in standard CoNLL-type tab-separated format. One word per line, separate column for token and label, empty line between sentences.
+
+For error detection, this would be something like this:
+
+    I       c
+    saws    i
+    the     c
+    show    c
+    
+
+The first column is assumed to be the token and the last column is the label. There can be other columns in the middle, which are currently not used. For example:
+
+    EU      NNP     I-NP    S-ORG
+    rejects VBZ     I-VP    O
+    German  JJ      I-NP    S-MISC
+    call    NN      I-NP    O
+    to      TO      I-VP    O
+    boycott VB      I-VP    O
+    British JJ      I-NP    S-MISC
+    lamb    NN      I-NP    O
+    .       .       O       O
+    
+
 Configuration
 -------------------------
 
