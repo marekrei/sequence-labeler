@@ -15,8 +15,8 @@ Requirements
 -------------------------
 
 * numpy
-* theano
-* lasagne
+* theano (tested with 0.8.2)
+* lasagne (tested with 0.1)
 
 
 Data format
