@@ -14,7 +14,8 @@ Preferably with Theano set up to use CUDA, so the process can run on a GPU. The 
 Requirements
 -------------------------
 
-* numpy
+* python (tested with 2.7.6)
+* numpy (tested with 1.11.3)
 * theano (tested with 0.8.2)
 * lasagne (tested with 0.1)
 
