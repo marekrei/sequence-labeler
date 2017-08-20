@@ -1,7 +1,6 @@
 import time
 import collections
 import numpy
-
 import conlleval
 
 class SequenceLabelingEvaluator(object):
@@ -22,7 +21,6 @@ class SequenceLabelingEvaluator(object):
             self.id2label = collections.OrderedDict()
             for label in self.label2id:
                 self.id2label[self.label2id[label]] = label
-
         self.conll_format = []
 
     def append_data(self, cost, predicted_labels, word_ids, label_ids):

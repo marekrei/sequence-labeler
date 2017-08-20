@@ -2,9 +2,8 @@ import sys
 import theano
 import numpy
 import collections
-import cPickle
+import pickle
 import lasagne
-
 import crf
 import recurrence
 
@@ -100,7 +99,7 @@ class SequenceLabeler(object):
             predicted_labels = theano.tensor.argmax(output_probs, axis=2)
             cost += theano.tensor.nnet.categorical_crossentropy(output_probs_, label_ids.reshape((-1,))).sum()
 
-        gradients = theano.tensor.grad(cost, self.params.values(), disconnected_inputs='ignore')
+        gradients = theano.tensor.grad(cost, list(self.params.values()), disconnected_inputs='ignore')
         if config["opt_strategy"] == "adadelta":
             updates = lasagne.updates.adadelta(gradients, self.params.values(), learningrate)
         elif config["opt_strategy"] == "adam":
@@ -134,13 +133,13 @@ class SequenceLabeler(object):
 
     def get_parameter_count(self):
         total = 0
-        for key, val in self.params.iteritems():
+        for key, val in self.params.items():
             total += val.get_value().size
         return total
 
     def get_parameter_count_without_word_embeddings(self):
         total = 0
-        for key, val in self.params.iteritems():
+        for key, val in self.params.items():
             if val == self.word_embeddings:
                 continue
             total += val.get_value().size
@@ -152,14 +151,14 @@ class SequenceLabeler(object):
         dump["params"] = {}
         for param_name in self.params:
             dump["params"][param_name] = self.params[param_name].get_value()
-        f = file(filename, 'wb')
-        cPickle.dump(dump, f, protocol=cPickle.HIGHEST_PROTOCOL)
+        f = open(filename, 'wb')
+        pickle.dump(dump, f, protocol=pickle.HIGHEST_PROTOCOL)
         f.close()
 
     @staticmethod
     def load(filename):
-        f = file(filename, 'rb')
-        dump = cPickle.load(f)
+        f = open(filename, 'rb')
+        dump = pickle.load(f)
         f.close()
         sequencelabeler = SequenceLabeler(dump["config"])
         for param_name in sequencelabeler.params:

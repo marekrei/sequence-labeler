@@ -35,13 +35,13 @@ def create_lstm(input_tensor, input_size, mask, recurrent_size, only_return_fina
 
     def _slice(M, slice_num, total_slices):
         if M.ndim == 3:
-            l = M.shape[2] / total_slices
+            l = M.shape[2] // total_slices
             return M[:, :, slice_num*l:(slice_num+1)*l]
         elif M.ndim == 2:
-            l = M.shape[1] / total_slices
+            l = M.shape[1] // total_slices
             return M[:, slice_num*l:(slice_num+1)*l]
         elif M.ndim == 1:
-            l = M.shape[0] / total_slices
+            l = M.shape[0] // total_slices
             return M[slice_num*l:(slice_num+1)*l]
 
     h_initial = theano.tensor.alloc(numpy.array(0, dtype=floatX), input_tensor.shape[1], recurrent_size)
