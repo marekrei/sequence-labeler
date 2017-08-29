@@ -36,7 +36,7 @@ def read_input_files(file_paths):
                     sentences.append((words, labels))
                     words, labels = [], []
             if len(words) > 0:
-                raise ValueError("The format expects an empty line at the end of the file in: " + file_path)
+                raise ValueError("The format expects an empty line at the end of the file in: ", file_path)
     return sentences
 
 
