@@ -2,10 +2,14 @@ import sys
 import theano
 import numpy
 import collections
-import pickle
 import lasagne
 import crf
 import recurrence
+
+try:
+    import cPickle as pickle
+except:
+    import pickle
 
 sys.setrecursionlimit(50000)
 floatX=theano.config.floatX
@@ -151,17 +155,17 @@ class SequenceLabeler(object):
         dump["params"] = {}
         for param_name in self.params:
             dump["params"][param_name] = self.params[param_name].get_value()
-        f = open(filename, 'wb')
-        pickle.dump(dump, f, protocol=pickle.HIGHEST_PROTOCOL)
-        f.close()
+        with open(filename, 'wb') as f:
+            pickle.dump(dump, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     @staticmethod
     def load(filename):
-        f = open(filename, 'rb')
-        dump = pickle.load(f)
-        f.close()
-        sequencelabeler = SequenceLabeler(dump["config"])
-        for param_name in sequencelabeler.params:
-            assert(param_name in dump["params"])
-            sequencelabeler.params[param_name].set_value(dump["params"][param_name])
+        sequencelabeler = None
+        with open(filename, 'rb') as f:
+            dump = pickle.load(f)
+            sequencelabeler = SequenceLabeler(dump["config"])
+            for param_name in sequencelabeler.params:
+                assert(param_name in dump["params"])
+                sequencelabeler.params[param_name].set_value(dump["params"][param_name])
         return sequencelabeler
+

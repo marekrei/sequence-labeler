@@ -6,9 +6,13 @@ import math
 import gc
 import os
 import re
-import configparser
 import theano
 import time
+
+try:
+    import ConfigParser as configparser
+except:
+    import configparser
 
 from sequence_labeler import SequenceLabeler
 from sequence_labeling_evaluator import SequenceLabelingEvaluator
@@ -36,7 +40,7 @@ def read_input_files(file_paths):
                     sentences.append((words, labels))
                     words, labels = [], []
             if len(words) > 0:
-                raise ValueError("The format expects an empty line at the end of the file in: ", file_path)
+                raise ValueError("The format expects an empty line at the end of the file in: " + str(file_path))
     return sentences
 
 
@@ -306,9 +310,9 @@ def run_experiment(config_path):
 
     # printing config
     for key, val in config.items():
-        print(key, ": ", val)
-    print("parameter_count: ", sequencelabeler.get_parameter_count())
-    print("parameter_count_without_word_embeddings: ", sequencelabeler.get_parameter_count_without_word_embeddings())
+        print(str(key) + ": " + str(val))
+    print("parameter_count: " + str(sequencelabeler.get_parameter_count()))
+    print("parameter_count_without_word_embeddings: " + str(sequencelabeler.get_parameter_count_without_word_embeddings()))
 
     config["word2id"] = word2id
     config["char2id"] = char2id
