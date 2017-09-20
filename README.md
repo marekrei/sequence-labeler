@@ -15,10 +15,13 @@ Requirements
 -------------------------
 
 * python (tested with 2.7.6)
-* numpy (tested with 1.11.3)
+* numpy (tested with 1.12.0)
 * theano (tested with 0.8.2)
 * lasagne (tested with 0.1)
 
+The code should also be compatible with python3.
+
+At the time of writing, the latest released version of lasagne is not compatible with the latest released version of theano. Install the development version of lasagne to get around this.
 
 Data format
 -------------------------
