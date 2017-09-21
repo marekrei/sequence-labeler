@@ -23,6 +23,8 @@ The code should also be compatible with python3.
 
 At the time of writing, the latest released version of lasagne is not compatible with the latest released version of theano. Install the development version of lasagne to get around this.
 
+The latest cuDNN doesn't seem to behave well with the CRF implementation. If you get weird errors with CRF activated, try disabling cuDNN with dnn.enabled=False.
+
 Data format
 -------------------------
 
