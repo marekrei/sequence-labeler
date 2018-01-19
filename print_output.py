@@ -1,42 +1,41 @@
 import sys
-import sequence_labeler
-import sequence_labeling_experiment
+import labeler
+import experiment
 import numpy
 import collections
 import time
 
-def print_predictions(print_probs, sequencelabeler_model_path, input_file):
+def print_predictions(print_probs, model_path, input_file):
     time_loading = time.time()
-    model = sequence_labeler.SequenceLabeler.load(sequencelabeler_model_path)
+    model = labeler.SequenceLabeler.load(model_path)
 
     time_noloading = time.time()
     config = model.config
     predictions_cache = {}
 
     id2label = collections.OrderedDict()
-    for label in config["label2id"]:
-        id2label[config["label2id"][label]] = label
+    for label in model.label2id:
+        id2label[model.label2id[label]] = label
 
-    sentences_test = sequence_labeling_experiment.read_input_files(input_file)
-    batches_of_sentence_ids = sequence_labeling_experiment.create_batches_of_sentence_ids(sentences_test, config['max_batch_size'])
+    sentences_test = experiment.read_input_files(input_file)
+    batches_of_sentence_ids = experiment.create_batches_of_sentence_ids(sentences_test, config["batch_equal_size"], config['max_batch_size'])
 
     for sentence_ids_in_batch in batches_of_sentence_ids:
-        word_ids, char_ids, char_mask, label_ids = sequence_labeling_experiment.create_feature_matrices_for_batch(sentences_test, sentence_ids_in_batch, config["word2id"], config["char2id"], config["label2id"], singletons=None, config=config)
+        batch = [sentences_test[i] for i in sentence_ids_in_batch]
+        cost, predicted_labels, predicted_probs = model.process_batch(batch, is_training=False, learningrate=0.0)
 
-        cost, predicted_labels, predicted_probs = model.test_return_probs(word_ids, char_ids, char_mask, label_ids)
-
-        assert(len(sentence_ids_in_batch) == word_ids.shape[0])
+        assert(len(sentence_ids_in_batch) == len(predicted_labels))
 
         for i in range(len(sentence_ids_in_batch)):
             key = str(sentence_ids_in_batch[i])
             predictions = []
             if print_probs == False:
-                for j in range(predicted_labels.shape[1]):
+                for j in range(len(predicted_labels[i])):
                     predictions.append(id2label[predicted_labels[i][j]])
             elif print_probs == True:
-                for j in range(predicted_probs.shape[1]):
+                for j in range(len(predicted_probs[i])):
                     p_ = ""
-                    for k in range(predicted_probs.shape[2]):
+                    for k in range(len(predicted_probs[i][j])):
                         p_ += str(id2label[k]) + ":" + str(predicted_probs[i][j][k]) + "\t"
                     predictions.append(p_.strip())
             predictions_cache[key] = predictions

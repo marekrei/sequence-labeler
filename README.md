@@ -7,23 +7,17 @@ The main model implements a bidirectional LSTM for sequence tagging. In addition
 
 Run with:
 
-    python sequence_labeling_experiment.py config.conf
+    python experiment.py config.conf
 
-Preferably with Theano set up to use CUDA, so the process can run on a GPU. The script will train the model on the training data, test it on the test data, and print various evaluation metrics.
+Preferably with Tensorflow set up to use CUDA, so the process can run on a GPU. The script will train the model on the training data, test it on the test data, and print various evaluation metrics.
 
 Requirements
 -------------------------
 
-* python (tested with 2.7.6)
-* numpy (tested with 1.12.0)
-* theano (tested with 0.8.2)
-* lasagne (tested with 0.1)
+* python (tested with 2.7.12 and 3.5.2)
+* numpy (tested with 1.13.3 and 1.14.0)
+* tensorflow (tested with 1.3.0 and 1.4.1)
 
-The code should also be compatible with python3.
-
-At the time of writing, the latest released version of lasagne is not compatible with the latest released version of theano. Install the development version of lasagne to get around this.
-
-The latest cuDNN doesn't seem to behave well with the CRF implementation. If you get weird errors with CRF activated, try disabling cuDNN with dnn.enabled=False.
 
 Data format
 -------------------------
@@ -59,36 +53,52 @@ Edit the values in config.conf as needed:
 * **path_train** - Path to the training data, in CoNLL tab-separated format. One word per line, first column is the word, last column is the label. Empty lines between sentences.
 * **path_dev** - Path to the development data, used for choosing the best epoch.
 * **path_test** - Path to the test file. Can contain multiple files, colon separated.
-* **main_label** - The output label for which precision/recall/F-measure are calculated.
 * **conll_eval** - Whether the standard CoNLL NER evaluation should be run.
-* **lowercase_words** - Whether words should be lowercased when mapping to word embeddings.
-* **lowercase_chars** - Whether characters should be lowercased when mapping to character embeddings.
-* **replace_digits** - Whether all digits should be replaced by 0.
-* **min_word_freq** - Minimal frequency of words to be included in the vocabulary. Others will be considered OOV.
-* **use_singletons** - Option for randomly mapping words with count 1 to OOVs.
-* **allowed_word_length** - Maximum allowed word length, clipping the rest. Can be necessary if the text contains unreasonably long tokens, eg URLs.
+* **main_label** - The output label for which precision/recall/F-measure are calculated. Does not affect accuracy or measures from the CoNLL eval.
+* **model_selector** - What is measured on the dev set for model selection: "dev_conll_f:high" for NER and chunking, "dev_acc:high" for POS-tagging, "dev_f05:high" for error detection.
 * **preload_vectors** - Path to the pretrained word embeddings, in word2vec plain text format. If your embeddings are in binary, you can use [convertvec](https://github.com/marekrei/convertvec) to convert them to plain text.
 * **word_embedding_size** - Size of the word embeddings used in the model.
+* **crf_on_top** - If True, use a CRF as the output layer. If False, use softmax instead.
+* **emb_initial_zero** - Whether word embeddings should have zero initialisation by default.
+* **train_embeddings** - Whether word embeddings should be updated during training.
 * **char_embedding_size** - Size of the character embeddings.
 * **word_recurrent_size** - Size of the word-level LSTM hidden layers.
 * **char_recurrent_size** - Size of the char-level LSTM hidden layers.
-* **narrow_layer_size** - Size of the extra hidden layer on top of the bi-LSTM.
-* **crf_on_top** - If True, use a CRF as the output layer. If False, use softmax instead.
-* **char_integration_method** - How character information is integrated. Options are: "none" (not integrated), "input" (concatenated), "attention" (the method proposed in Rei et al. (2016)).
-* **dropout_input** - The probability for applying dropout. 0.0 means no dropout.
-* **lmcost_gamma** - Weight for the language modeling loss. 
-* **lmcost_layer_size** = Hidden layer size for the language modeling loss.
-* **lmcost_max_vocab_size** = Maximum vocabulary size for the language modeling loss. The remaining words are mapped to a single entry.
-* **epochs** - Maximum number of epochs to run.
-* **best_model_selector** - What is measured on the dev set for model selection: "dev_conll_f:high" for NER and chunking, "dev_acc:high" for POS-tagging, "dev_f05:high" for error detection.
-* **stop_if_no_improvement_for_epochs** - Training will be stopped if there has been no improvement for n epochs.
+* **hidden_layer_size** - Size of the extra hidden layer on top of the bi-LSTM.
+* **char_hidden_layer_size** - Size of the extra hidden layer on top of the character-based component.
+* **lowercase** - Whether words should be lowercased when mapping to word embeddings.
+* **replace_digits** - Whether all digits should be replaced by 0.
+* **min_word_freq** - Minimal frequency of words to be included in the vocabulary. Others will be considered OOV.
+* **singletons_prob** - The probability of mapping words that appear only once to OOV instead during training.
+* **allowed_word_length** - Maximum allowed word length, clipping the rest. Can be necessary if the text contains unreasonably long tokens, eg URLs.
+* **max_train_sent_length** - Discard sentences longer than this limit when training.
+* **vocab_include_devtest** - Load words from dev and test sets also into the vocabulary. If they don't appear in the training set, they will have the default representations from the preloaded embeddings.
+* **vocab_only_embedded** - Whether the vocabulary should contain only words in the pretrained embedding set.
+* **initializer** - The method used to initialize weight matrices in the network.
+* **opt_strategy** - The method used for weight updates.
 * **learningrate** - Learning rate.
-* **opt_strategy** - Optimisation method: sgd/adadelta/adam.
-* **max_batch_size** - Maximum batch size.
+* **clip** - Clip the gradient to a range.
+* **batch_equal_size** - Create batches of sentences with equal length.
+* **epochs** - Maximum number of epochs to run.
+* **stop_if_no_improvement_for_epochs** - Training will be stopped if there has been no improvement for n epochs.
+* **learningrate_decay** - If performance hasn't improved for 3 epochs, multiply the learning rate with this value.
+* **dropout_input** - The probability for applying dropout to the word representations. 0.0 means no dropout.
+* **dropout_word_lstm** - The probability for applying dropout to the LSTM outputs.
+* **tf_per_process_gpu_memory_fraction** - The fraction of GPU memory that the process can use.
+* **tf_allow_growth** - Whether the GPU memory usage can grow dynamically.
+* **main_cost** - Control the weight of the main labeling objective.
+* **lmcost_max_vocab_size** = Maximum vocabulary size for the language modeling loss. The remaining words are mapped to a single entry.
+* **lmcost_hidden_layer_size** = Hidden layer size for the language modeling loss.
+* **lmcost_gamma** - Weight for the language modeling loss. 
+* **char_integration_method** - How character information is integrated. Options are: "none" (not integrated), "concat" (concatenated), "attention" (the method proposed in Rei et al. (2016)).
 * **save** - Path to save the model.
 * **load** - Path to load the model.
 * **garbage_collection** - Whether garbage collection is explicitly called. Makes things slower but can operate with bigger models.
+* **lstm_use_peepholes** - Whether to use the LSTM implementation with peepholes.
 * **random_seed** - Random seed for initialisation and data shuffling. This can affect results, so for robust conclusions I recommend running multiple experiments with different seeds and averaging the metrics.
+
+
+
 
 
 
@@ -108,26 +118,26 @@ You can also use:
     python print_output.py probs model_file input_file
 
 This will print the individual probabilities for each of the possible labels.
-
+If the model is using CRFs, the *probs* option will output unnormalised state scores without taking the transitions into account.
 
 
 References
 -------------------------
 
-If you use the main sequence labeling code, please reference:
+The main sequence labeling model is described here:
 
 [**Compositional Sequence Labeling Models for Error Detection in Learner Writing**](http://aclweb.org/anthology/P/P16/P16-1112.pdf)  
 Marek Rei and Helen Yannakoudakis  
 *In Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics (ACL-2016)*
   
 
-If you use the character-level attention component, please reference:
+The character-level component is described here:
 
 [**Attending to characters in neural sequence labeling models**](https://aclweb.org/anthology/C/C16/C16-1030.pdf)  
 Marek Rei, Gamal K.O. Crichton and Sampo Pyysalo  
 *In Proceedings of the 26th International Conference on Computational Linguistics (COLING-2016)*
 
-If you use the language modeling objective, please reference:
+The language modeling objective is described here:
 
 [**Semi-supervised Multitask Learning for Sequence Labeling**](https://arxiv.org/abs/1704.07156)  
 Marek Rei  
@@ -143,15 +153,22 @@ Guillaume Lample, Miguel Ballesteros, Sandeep Subramanian, Kazuya Kawakami and C
 The conlleval.py script is from: https://github.com/spyysalo/conlleval.py
 
 
+
+
 License
 ---------------------------
 
-MIT License
+The code is distributed under the Affero General Public License 3 (AGPL-3.0) by default. 
+If you wish to use it under a different license, feel free to get in touch.
 
-Copyright (c) 2017 Marek Rei
+Copyright (c) 2018 Marek Rei
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.

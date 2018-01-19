@@ -4,10 +4,11 @@ import numpy
 import conlleval
 
 class SequenceLabelingEvaluator(object):
-    def __init__(self, main_label_id, label2id=None, conll_eval=False):
-        self.main_label_id = main_label_id
+    def __init__(self, main_label, label2id, conll_eval=False):
+        self.main_label = main_label
         self.label2id = label2id
         self.conll_eval = conll_eval
+        self.main_label_id = self.label2id[self.main_label]
 
         self.cost_sum = 0.0
         self.correct_sum = 0.0
@@ -17,26 +18,31 @@ class SequenceLabelingEvaluator(object):
         self.token_count = 0
         self.start_time = time.time()
 
-        if self.label2id is not None:
-            self.id2label = collections.OrderedDict()
-            for label in self.label2id:
-                self.id2label[self.label2id[label]] = label
+        self.id2label = collections.OrderedDict()
+        for label in self.label2id:
+            self.id2label[self.label2id[label]] = label
+
         self.conll_format = []
 
-    def append_data(self, cost, predicted_labels, word_ids, label_ids):
+    def append_data(self, cost, batch, predicted_labels):
         self.cost_sum += cost
-        self.token_count += label_ids.size
-        self.correct_sum += numpy.equal(predicted_labels, label_ids).sum()
-        self.main_predicted_count += (predicted_labels == self.main_label_id).sum()
-        self.main_total_count += (label_ids == self.main_label_id).sum()
-        self.main_correct_count += ((predicted_labels == self.main_label_id)*(label_ids == self.main_label_id)).sum()
+        for i in range(len(batch)):
+            for j in range(len(batch[i])):
+                token = batch[i][j][0]
+                gold_label = batch[i][j][-1]
+                predicted_label = self.id2label[predicted_labels[i][j]]
 
-        for i in range(word_ids.shape[0]):
-            for j in range(word_ids.shape[1]-2):
-                try:
-                    self.conll_format.append(str(word_ids[i][j+1]) + "\t" + str(self.id2label[label_ids[i][j]]) + "\t" + str(self.id2label[predicted_labels[i][j]]))
-                except KeyError:
-                    print("Unexpected label id in predictions.") # Probably means the CRF decided to predict a start/end label, which it shouldn't
+                self.token_count += 1
+                if gold_label == predicted_label:
+                    self.correct_sum += 1
+                if predicted_label == self.main_label:
+                    self.main_predicted_count += 1
+                if gold_label == self.main_label:
+                    self.main_total_count += 1
+                if predicted_label == gold_label and gold_label == self.main_label:
+                    self.main_correct_count += 1
+
+                self.conll_format.append(token + "\t" + gold_label + "\t" + predicted_label)
             self.conll_format.append("")
 
 

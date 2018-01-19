@@ -154,7 +154,7 @@ def metrics(counts):
         c.correct_chunk, c.found_guessed, c.found_correct
     )
     by_type = {}
-    for t in uniq(c.t_found_correct.keys() + c.t_found_guessed.keys()):
+    for t in uniq(list(c.t_found_correct.keys()) + list(c.t_found_guessed.keys())):
         by_type[t] = calculate_metrics(
             c.t_correct_chunk[t], c.t_found_guessed[t], c.t_found_correct[t]
         )
