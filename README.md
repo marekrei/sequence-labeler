@@ -11,7 +11,7 @@ Run with:
 
 Preferably with Tensorflow set up to use CUDA, so the process can run on a GPU. The script will train the model on the training data, test it on the test data, and print various evaluation metrics.
 
-Note: The original sequence labeler was implemented in Theano, but since Theano is soon ending, I have reimplemented it in TensorFlow. I also used the chance to refactor the code a bit, and it should be better in every way. However, if you need the specific code used in previously published papers, you'll need to refer to older commits.
+Note: The original sequence labeler was implemented in Theano, but since Theano is soon ending support, I have reimplemented it in TensorFlow. I also used the chance to refactor the code a bit, and it should be better in every way. However, if you need the specific code used in previously published papers, you'll need to refer to older commits.
 
 Requirements
 -------------------------
