@@ -340,7 +340,7 @@ class SequenceLabeler(object):
             for j in range(len(batch[i])):
                 word_ids[i][j] = self.translate2id(batch[i][j][0], self.word2id, self.UNK, lowercase=self.config["lowercase"], replace_digits=self.config["replace_digits"], singletons=singletons, singletons_prob=singletons_prob)
                 label_ids[i][j] = self.translate2id(batch[i][j][-1], self.label2id, None)
-                word_lengths[i][j] = len(batch[i][j][0])
+                word_lengths[i][j] = min(len(batch[i][j][0]), max_word_length)
                 for k in range(min(len(batch[i][j][0]), max_word_length)):
                     char_ids[i][j][k] = self.translate2id(batch[i][j][0][k], self.char2id, self.CUNK)
 
